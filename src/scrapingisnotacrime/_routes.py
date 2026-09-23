@@ -86,7 +86,7 @@ def appstore_reviews(app_id: str, country: str | None, page: int | None) -> Page
         {"appId": app_id, "country": country},
         "numbered",
         "reviews",
-        page or 1,
+        1 if page is None else page,
         max_page=10,
     )
 
