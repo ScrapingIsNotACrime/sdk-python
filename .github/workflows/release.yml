@@ -1,0 +1,65 @@
+name: Release
+
+# Executado a cada push na main. O semantic-release lê os commits desde a
+# última tag v* (fix → patch, feat → minor; breaking → minor enquanto em 0.x)
+# e, se houver release a fazer, cria a tag e o GitHub Release. O job de
+# publish então builda a partir dessa tag (o hatch-vcs lê a versão dela) e
+# envia para o PyPI via Trusted Publishing.
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: vars.PYPI_PUBLISH_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # cria a tag v* e o GitHub Release
+    outputs:
+      version: ${{ steps.semantic.outputs.version }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: python -m pip install -e ".[dev]"
+      - run: ruff check . && mypy && pytest
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - id: semantic
+        run: >-
+          npx --yes
+          -p semantic-release@25
+          -p @semantic-release/exec@7
+          -p conventional-changelog-conventionalcommits@9
+          semantic-release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  publish:
+    needs: release
+    if: needs.release.outputs.version != ''
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write # Trusted Publishing do PyPI
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: v${{ needs.release.outputs.version }}
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: python -m pip install build
+      - run: python -m build
+      - name: Confere se a versão buildada bate com a tag
+        run: ls dist | grep -F "scrapingisnotacrime-${{ needs.release.outputs.version }}"
+      - uses: pypa/gh-action-pypi-publish@release/v1
