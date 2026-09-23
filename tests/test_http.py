@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import asyncio
 import json
+import time
+from collections.abc import Iterator
 from typing import Any
 
 import httpx
@@ -152,6 +155,47 @@ def test_network_errors_and_timeouts_become_connection_error() -> None:
     with pytest.raises(ConnectionError, match="timed out after 30 s") as info:
         http.get(Route("/x"))
     assert info.value.status is None
+
+
+def test_network_error_chains_the_original_exception() -> None:
+    http, _, _ = sync_http([httpx.ConnectError("refused")], max_retries=0)
+    with pytest.raises(ConnectionError) as info:
+        http.get(Route("/x"))
+    assert isinstance(info.value.__cause__, httpx.ConnectError)
+
+
+def test_sync_wall_clock_timeout_becomes_connection_error() -> None:
+    class SlowBody(httpx.SyncByteStream):
+        def __init__(self, chunks: list[bytes], delay: float) -> None:
+            self._chunks = chunks
+            self._delay = delay
+
+        def __iter__(self) -> Iterator[bytes]:
+            for chunk in self._chunks:
+                time.sleep(self._delay)
+                yield chunk
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        payload = json.dumps({"message": "ok", "data": 1}).encode()
+        chunks = [payload[i : i + 4] for i in range(0, len(payload), 4)]
+        return httpx.Response(200, stream=SlowBody(chunks, 0.03))
+
+    config = resolve_config(api_key="sinac_test", env={}, timeout=0.05, max_retries=0)
+    http = SyncHttp(config, httpx.Client(transport=httpx.MockTransport(handler)), sleep=lambda seconds: None)
+    with pytest.raises(ConnectionError, match="timed out"):
+        http.get(Route("/x"))
+
+
+async def test_async_wall_clock_timeout_becomes_connection_error() -> None:
+    async def handler(request: httpx.Request) -> httpx.Response:
+        await asyncio.sleep(0.2)
+        return httpx.Response(200, content=json.dumps({"message": "ok", "data": 1}))
+
+    config = resolve_config(api_key="sinac_test", env={}, timeout=0.05, max_retries=0)
+    http = AsyncHttp(config, httpx.AsyncClient(transport=httpx.MockTransport(handler)))
+    with pytest.raises(ConnectionError, match="timed out"):
+        await http.get(Route("/x"))
+    await http.aclose()
 
 
 def test_2xx_without_envelope_is_api_error() -> None:

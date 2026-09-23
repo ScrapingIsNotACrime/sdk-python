@@ -61,37 +61,44 @@ class _Failure:
     retry_after: str | None = None
 
 
-def _interpret(response: httpx.Response) -> tuple[bool, Any]:
+def _interpret(status_code: int, headers: httpx.Headers, text: str) -> tuple[bool, Any]:
     """(True, data) for a valid envelope; (False, _Failure) otherwise."""
-    request_id = response.headers.get("x-request-id")
-    text = response.text
+    request_id = headers.get("x-request-id")
     try:
         body = json.loads(text) if text else None
     except ValueError:
         body = None
     envelope = body if isinstance(body, dict) else None
 
-    if response.is_success:
+    if 200 <= status_code < 300:
         if envelope is not None and "data" in envelope:
             return True, envelope["data"]
         unexpected_body_error = APIError(
-            f"Unexpected response body (HTTP {response.status_code}): {_snippet(text)}",
-            status=response.status_code,
+            f"Unexpected response body (HTTP {status_code}): {_snippet(text)}",
+            status=status_code,
             request_id=request_id,
         )
         return False, _Failure(unexpected_body_error)
 
     message = envelope.get("message") if envelope is not None else None
     if not isinstance(message, str):
-        message = f"HTTP {response.status_code}: {_snippet(text)}"
-    status_error = error_from_status(response.status_code, message, request_id)
-    return False, _Failure(status_error, response.headers.get("retry-after"))
+        message = f"HTTP {status_code}: {_snippet(text)}"
+    status_error = error_from_status(status_code, message, request_id)
+    return False, _Failure(status_error, headers.get("retry-after"))
 
 
-def _connection_failure(error: httpx.HTTPError, timeout: float) -> _Failure:
-    if isinstance(error, httpx.TimeoutException):
-        return _Failure(ConnectionError(f"Request timed out after {timeout:g} s"))
-    return _Failure(ConnectionError(f"Network error: {error}"))
+def _timeout_error(timeout: float, cause: BaseException) -> ConnectionError:
+    error = ConnectionError(f"Request timed out after {timeout:g} s")
+    error.__cause__ = cause
+    return error
+
+
+def _connection_failure(cause: httpx.HTTPError, timeout: float) -> _Failure:
+    if isinstance(cause, httpx.TimeoutException):
+        return _Failure(_timeout_error(timeout, cause))
+    error = ConnectionError(f"Network error: {cause}")
+    error.__cause__ = cause
+    return _Failure(error)
 
 
 class SyncHttp:
@@ -114,8 +121,9 @@ class SyncHttp:
         attempt = 0
         while True:
             try:
-                response = self._client.get(url, headers=_headers(self._config), timeout=self._config.timeout)
-                ok, value = _interpret(response)
+                ok, value = self._attempt(url)
+            except TimeoutError as error:
+                ok, value = False, _Failure(_timeout_error(self._config.timeout, error))
             except httpx.HTTPError as error:
                 ok, value = False, _connection_failure(error, self._config.timeout)
             if ok:
@@ -125,6 +133,26 @@ class SyncHttp:
                 raise failure.error
             self._sleep(retry_delay(attempt, failure.retry_after, self._random))
             attempt += 1
+
+    def _attempt(self, url: str) -> tuple[bool, Any]:
+        # httpx's `timeout=` only bounds inactivity between reads, not the total
+        # request+body wall-clock time: a response trickling one byte just under
+        # that interval would never trip it. We stream the body and enforce a
+        # wall-clock deadline across the whole read ourselves. Worst case, a
+        # stalled read overshoots the deadline by up to one httpx read timeout
+        # before the next chunk lets us notice it — acceptable.
+        deadline = time.monotonic() + self._config.timeout
+        with self._client.stream(
+            "GET", url, headers=_headers(self._config), timeout=self._config.timeout
+        ) as response:
+            chunks: list[bytes] = []
+            for chunk in response.iter_bytes():
+                chunks.append(chunk)
+                if time.monotonic() > deadline:
+                    response.close()
+                    raise TimeoutError(f"Stream exceeded the {self._config.timeout:g} s deadline")
+            text = b"".join(chunks).decode("utf-8", errors="replace")
+        return _interpret(response.status_code, response.headers, text)
 
     def close(self) -> None:
         if self._owns_client:
@@ -151,10 +179,16 @@ class AsyncHttp:
         attempt = 0
         while True:
             try:
-                response = await self._client.get(
-                    url, headers=_headers(self._config), timeout=self._config.timeout
-                )
-                ok, value = _interpret(response)
+                # `asyncio.timeout` bounds the whole request + body read by wall
+                # clock, unlike httpx's `timeout=` which only bounds inactivity
+                # between reads (see SyncHttp._attempt for the sync equivalent).
+                async with asyncio.timeout(self._config.timeout):
+                    response = await self._client.get(
+                        url, headers=_headers(self._config), timeout=self._config.timeout
+                    )
+                ok, value = _interpret(response.status_code, response.headers, response.text)
+            except TimeoutError as error:
+                ok, value = False, _Failure(_timeout_error(self._config.timeout, error))
             except httpx.HTTPError as error:
                 ok, value = False, _connection_failure(error, self._config.timeout)
             if ok:
