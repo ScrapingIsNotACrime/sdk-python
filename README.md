@@ -129,20 +129,26 @@ class Page(Generic[T]):
     def __iter__(self) -> Iterator[T]: ...  # every item, fetching further pages lazily
 ```
 
-Iterate every item, fetching further pages lazily as they're needed:
+Iterate every item, fetching further pages lazily as they're needed. Iterating fetches every remaining page; each page is one billed request, so bound the loop:
 
 ```python
 page = client.github.followers("torvalds", limit=100)
-for user in page:
+for count, user in enumerate(page, start=1):
     print(user["username"])
+    if count >= 100:
+        break  # stop early; no further pages are fetched
 ```
 
 Async, with `async for`:
 
 ```python
 page = await client.bluesky.posts("bsky.app", limit=25)
+count = 0
 async for post in page:
     print(post)
+    count += 1
+    if count >= 100:
+        break  # stop early; no further pages are fetched
 ```
 
 `page.data` gives you the untouched response of the current page, so fields such as `total` stay reachable. Breaking out of the loop early stops fetching — no further pages are requested once you `break`.

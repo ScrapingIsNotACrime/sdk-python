@@ -10,8 +10,12 @@ async def main() -> None:
         except NotFoundError:
             print("No such profile.")
             return
+        count = 0
         async for post in page:
             print(post)
+            count += 1
+            if count >= 100:
+                break  # stop early; no further pages are fetched
 
 
 asyncio.run(main())
