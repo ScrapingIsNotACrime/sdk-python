@@ -63,10 +63,12 @@ ScrapingIsNotACrime(
 | Option | Default | Description |
 |---|---|---|
 | `api_key` | `SCRAPINGISNOTACRIME_API_KEY` env var | Your API key (`sinac_…`). Raises `ValueError` at construction if missing. |
-| `base_url` | `https://api.scrapingisnotacrime.com/v1` | API base URL. |
-| `timeout` | `30.0` | Per-attempt timeout, in seconds. |
+| `base_url` | `https://api.scrapingisnotacrime.com/v1` | API base URL. Must be the final HTTPS URL: the client does not follow redirects, so a `base_url` that itself redirects fails (see [Errors](#errors)) — following one would forward the `X-Api-Key` header to whatever host it points to. |
+| `timeout` | `30.0` | Per attempt, in seconds. Bounds each phase of the request (connect, send, and waiting for headers) individually, the way httpx's own `timeout` does; the body read is additionally capped by a wall-clock deadline of `timeout` from the start of the attempt. |
 | `max_retries` | `2` | Extra attempts for 429, 502 and network errors. `0` disables retries. |
 | `http_client` | a new `httpx.Client` (or `httpx.AsyncClient`) | Bring your own httpx client — for tests, proxies or connection pooling. Only closed by `client.close()` / `await client.aclose()` when the SDK created it. |
+
+`AsyncScrapingIsNotACrime` is built on `httpx.AsyncClient` and requires asyncio; it does not run under trio.
 
 ## Methods
 
@@ -176,7 +178,7 @@ Every failure raises a subclass of `ScrapingIsNotACrimeError`, carrying `status`
 | `RateLimitError` | 429 | yes |
 | `UpstreamError` | 502 | yes |
 | `ConnectionError` | network failure or timeout | yes |
-| `APIError` | any other non-2xx | no |
+| `APIError` | any other non-2xx, or a 2xx without the JSON envelope | no |
 
 `ConnectionError` here is the SDK's own class — import it from `scrapingisnotacrime`, not the builtin `ConnectionError`.
 
@@ -218,6 +220,10 @@ Every merge to `main` is released automatically: the version comes from the comm
 | `feat!:` or a `BREAKING CHANGE:` footer | minor while in 0.x |
 
 The pipeline tags `vX.Y.Z`, publishes the GitHub Release with the notes, and publishes to PyPI through Trusted Publishing. The changelog is the [Releases page](https://github.com/ScrapingIsNotACrime/sdk-python/releases); the version is resolved from git tags at build time (`hatch-vcs`), so no version number is written into the repository.
+
+Merge PRs with a merge commit or rebase so each Conventional Commit is analysed; if you squash, the PR title must be a Conventional Commit (e.g. `feat: ...`).
+
+If the publish job fails after a release was tagged, use *Re-run failed jobs* on that run, or run the Release workflow manually with the tag.
 
 ## Links
 
