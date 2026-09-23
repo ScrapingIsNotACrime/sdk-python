@@ -44,6 +44,17 @@ def test_close_leaves_user_client_open() -> None:
     assert owned._http._client.is_closed
 
 
+async def test_async_close_leaves_user_client_open() -> None:
+    user_client = httpx.AsyncClient()
+    async with AsyncScrapingIsNotACrime("sinac_test", http_client=user_client):
+        pass
+    assert not user_client.is_closed
+    await user_client.aclose()
+    owned = AsyncScrapingIsNotACrime("sinac_test")
+    await owned.aclose()
+    assert owned._http._client.is_closed
+
+
 def test_sync_invalid_argument_raises_at_call() -> None:
     client = ScrapingIsNotACrime("sinac_test")
     with pytest.raises(ValueError, match="Invalid path segment"):

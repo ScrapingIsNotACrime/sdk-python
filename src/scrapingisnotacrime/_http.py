@@ -80,6 +80,19 @@ def _interpret(status_code: int, headers: httpx.Headers, text: str) -> tuple[boo
         )
         return False, _Failure(unexpected_body_error)
 
+    if 300 <= status_code < 400:
+        # The client never follows redirects (the API key header would be
+        # forwarded to whatever host `Location` names), so a 3xx here always
+        # means the request went nowhere useful. Report it as an APIError.
+        location = headers.get("location")
+        redirect_message = (
+            f"HTTP {status_code}: redirect to {location} not followed"
+            if location
+            else f"HTTP {status_code}: redirect not followed"
+        )
+        redirect_error = APIError(redirect_message, status=status_code, request_id=request_id)
+        return False, _Failure(redirect_error, headers.get("retry-after"))
+
     message = envelope.get("message") if envelope is not None else None
     if not isinstance(message, str):
         message = f"HTTP {status_code}: {_snippet(text)}"
@@ -135,23 +148,33 @@ class SyncHttp:
             attempt += 1
 
     def _attempt(self, url: str) -> tuple[bool, Any]:
-        # httpx's `timeout=` only bounds inactivity between reads, not the total
-        # request+body wall-clock time: a response trickling one byte just under
-        # that interval would never trip it. We stream the body and enforce a
-        # wall-clock deadline across the whole read ourselves. Worst case, a
+        # httpx's `timeout=` bounds each phase separately (connect, send the
+        # request, and the wait for each read) but not the wall-clock time of
+        # the attempt as a whole: a response trickling one byte just under that
+        # per-read interval would never trip it. We track our own wall-clock
+        # deadline for the whole attempt, check it as soon as the headers come
+        # back, and check it again after every body chunk. Worst case, a
         # stalled read overshoots the deadline by up to one httpx read timeout
         # before the next chunk lets us notice it — acceptable.
         deadline = time.monotonic() + self._config.timeout
         with self._client.stream(
             "GET", url, headers=_headers(self._config), timeout=self._config.timeout
         ) as response:
+            if time.monotonic() > deadline:
+                response.close()
+                raise TimeoutError(f"Stream exceeded the {self._config.timeout:g} s deadline")
             chunks: list[bytes] = []
             for chunk in response.iter_bytes():
                 chunks.append(chunk)
                 if time.monotonic() > deadline:
                     response.close()
                     raise TimeoutError(f"Stream exceeded the {self._config.timeout:g} s deadline")
-            text = b"".join(chunks).decode(response.encoding or "utf-8", errors="replace")
+            # `response.encoding` would call a callable `default_encoding` on
+            # `response._content`, which manual `iter_bytes` consumption never
+            # sets — httpx treats the response as unread and raises
+            # `ResponseNotRead`. `charset_encoding` only inspects the
+            # Content-Type header, so it's always safe here.
+            text = b"".join(chunks).decode(response.charset_encoding or "utf-8", errors="replace")
         return _interpret(response.status_code, response.headers, text)
 
     def close(self) -> None:

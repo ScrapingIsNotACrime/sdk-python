@@ -21,6 +21,7 @@ from scrapingisnotacrime._errors import (
     UpstreamError,
 )
 from scrapingisnotacrime._http import AsyncHttp, Route, SyncHttp, build_url, segment
+from scrapingisnotacrime._pagination import PageSpec, afetch_page
 
 Reply = tuple[int, Any, dict[str, str]] | Exception
 
@@ -245,6 +246,72 @@ def test_does_not_close_a_user_client() -> None:
     http = SyncHttp(resolve_config(api_key="k", env={}), client)
     http.close()
     assert not client.is_closed
+
+
+def test_sync_decodes_body_with_callable_default_encoding() -> None:
+    # `response.encoding` would call the user's `default_encoding` callable on a
+    # response we've read manually via `iter_bytes`, which httpx treats as unread
+    # and raises `ResponseNotRead` for. `charset_encoding` (Content-Type only)
+    # sidesteps that entirely.
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, content=json.dumps({"message": "ok", "data": "x"}).encode())
+
+    client = httpx.Client(transport=httpx.MockTransport(handler), default_encoding=lambda content: "utf-8")
+    http = SyncHttp(resolve_config(api_key="sinac_test", env={}), client)
+    assert http.get(Route("/x")) == "x"
+
+
+def test_redirect_not_followed_reports_location() -> None:
+    http, recorder, _ = sync_http([(301, "", {"location": "https://x.test/new"})])
+    with pytest.raises(APIError, match=r"HTTP 301: redirect to https://x\.test/new not followed"):
+        http.get(Route("/x"))
+    assert len(recorder.requests) == 1
+
+
+def test_redirect_not_followed_without_location() -> None:
+    http, _, _ = sync_http([(302, "", {})])
+    with pytest.raises(APIError, match=r"HTTP 302: redirect not followed"):
+        http.get(Route("/x"))
+
+
+def test_timeout_is_retried_then_raises_connection_error_with_cause() -> None:
+    http, recorder, _ = sync_http([httpx.ReadTimeout("slow")] * 2, max_retries=1)
+    with pytest.raises(ConnectionError) as info:
+        http.get(Route("/x"))
+    assert len(recorder.requests) == 2
+    assert isinstance(info.value.__cause__, httpx.ReadTimeout)
+
+
+async def test_async_redirect_not_followed_reports_location() -> None:
+    http, recorder, _ = async_http([(301, "", {"location": "https://x.test/new"})])
+    with pytest.raises(APIError, match=r"HTTP 301: redirect to https://x\.test/new not followed"):
+        await http.get(Route("/x"))
+    assert len(recorder.requests) == 1
+    await http.aclose()
+
+
+async def test_async_timeout_is_retried_then_raises_connection_error_with_cause() -> None:
+    http, recorder, _ = async_http([httpx.ReadTimeout("slow")] * 2, max_retries=1)
+    with pytest.raises(ConnectionError) as info:
+        await http.get(Route("/x"))
+    assert len(recorder.requests) == 2
+    assert isinstance(info.value.__cause__, httpx.ReadTimeout)
+    await http.aclose()
+
+
+async def test_async_break_stops_fetching_next_page() -> None:
+    http, recorder, _ = async_http(
+        [
+            ok({"posts": [1, 2], "next_cursor": "c2", "has_more": True}),
+            ok({"posts": [3], "next_cursor": None, "has_more": False}),
+        ]
+    )
+    page = await afetch_page(http, PageSpec("/p", {}, "cursor", "posts", None))
+    async for item in page:
+        assert item == 1
+        break
+    assert len(recorder.requests) == 1
+    await http.aclose()
 
 
 async def test_async_core_mirrors_sync() -> None:
