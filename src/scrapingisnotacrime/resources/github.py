@@ -54,7 +54,8 @@ class Github:
         language: str | None = None,
         limit: int | None = None,
     ) -> GithubTrending:
-        """GET /github/trending/repositories — not paginated; since defaults to daily."""
+        """GET /github/trending/repositories — not paginated; since defaults to "daily",
+        limit 1-100 (default 30)."""
         return cast(GithubTrending, self._http.get(routes.github_trending(since, language, limit)))
 
 
@@ -97,5 +98,6 @@ class AsyncGithub:
         language: str | None = None,
         limit: int | None = None,
     ) -> GithubTrending:
-        """GET /github/trending/repositories — not paginated; since defaults to daily."""
+        """GET /github/trending/repositories — not paginated; since defaults to "daily",
+        limit 1-100 (default 30)."""
         return cast(GithubTrending, await self._http.get(routes.github_trending(since, language, limit)))

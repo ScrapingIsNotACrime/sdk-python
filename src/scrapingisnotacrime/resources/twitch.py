@@ -18,7 +18,7 @@ class Twitch:
         return cast(TwitchProfile, self._http.get(routes.twitch_profile(handle)))
 
     def videos(self, handle: str, *, limit: int | None = None) -> TwitchVideos:
-        """GET /twitch/profiles/{handle}/videos — not paginated."""
+        """GET /twitch/profiles/{handle}/videos — not paginated; limit 1-100 (default 20)."""
         return cast(TwitchVideos, self._http.get(routes.twitch_videos(handle, limit)))
 
 
@@ -31,5 +31,5 @@ class AsyncTwitch:
         return cast(TwitchProfile, await self._http.get(routes.twitch_profile(handle)))
 
     async def videos(self, handle: str, *, limit: int | None = None) -> TwitchVideos:
-        """GET /twitch/profiles/{handle}/videos — not paginated."""
+        """GET /twitch/profiles/{handle}/videos — not paginated; limit 1-100 (default 20)."""
         return cast(TwitchVideos, await self._http.get(routes.twitch_videos(handle, limit)))

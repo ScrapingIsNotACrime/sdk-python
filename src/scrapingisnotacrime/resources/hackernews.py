@@ -21,11 +21,11 @@ class Hackernews:
         return fetch_page(self._http, routes.hackernews_feed(feed, limit, page))
 
     def item(self, item_id: int) -> HackernewsItem:
-        """GET /hackernews/items/{id}"""
+        """GET /hackernews/items/{id} — the item with its full comment tree."""
         return cast(HackernewsItem, self._http.get(routes.hackernews_item(item_id)))
 
     def search(self, q: str, *, limit: int | None = None, page: int | None = None) -> Page[HackernewsStory]:
-        """GET /hackernews/search — 0-based pages."""
+        """GET /hackernews/search — limit 1-50 (default 20), 0-based pages."""
         return fetch_page(self._http, routes.hackernews_search(q, limit, page))
 
     def user(self, username: str) -> HackernewsUser:
@@ -35,13 +35,13 @@ class Hackernews:
     def submissions(
         self, username: str, *, limit: int | None = None, page: int | None = None
     ) -> Page[HackernewsStory]:
-        """GET /hackernews/users/{username}/submissions — 0-based pages."""
+        """GET /hackernews/users/{username}/submissions — limit 1-50 (default 20), 0-based pages."""
         return fetch_page(self._http, routes.hackernews_submissions(username, limit, page))
 
     def comments(
         self, username: str, *, limit: int | None = None, page: int | None = None
     ) -> Page[HackernewsUserComment]:
-        """GET /hackernews/users/{username}/comments — 0-based pages."""
+        """GET /hackernews/users/{username}/comments — limit 1-50 (default 20), 0-based pages."""
         return fetch_page(self._http, routes.hackernews_comments(username, limit, page))
 
 
@@ -56,13 +56,13 @@ class AsyncHackernews:
         return await afetch_page(self._http, routes.hackernews_feed(feed, limit, page))
 
     async def item(self, item_id: int) -> HackernewsItem:
-        """GET /hackernews/items/{id}"""
+        """GET /hackernews/items/{id} — the item with its full comment tree."""
         return cast(HackernewsItem, await self._http.get(routes.hackernews_item(item_id)))
 
     async def search(
         self, q: str, *, limit: int | None = None, page: int | None = None
     ) -> AsyncPage[HackernewsStory]:
-        """GET /hackernews/search — 0-based pages."""
+        """GET /hackernews/search — limit 1-50 (default 20), 0-based pages."""
         return await afetch_page(self._http, routes.hackernews_search(q, limit, page))
 
     async def user(self, username: str) -> HackernewsUser:
@@ -72,11 +72,11 @@ class AsyncHackernews:
     async def submissions(
         self, username: str, *, limit: int | None = None, page: int | None = None
     ) -> AsyncPage[HackernewsStory]:
-        """GET /hackernews/users/{username}/submissions — 0-based pages."""
+        """GET /hackernews/users/{username}/submissions — limit 1-50 (default 20), 0-based pages."""
         return await afetch_page(self._http, routes.hackernews_submissions(username, limit, page))
 
     async def comments(
         self, username: str, *, limit: int | None = None, page: int | None = None
     ) -> AsyncPage[HackernewsUserComment]:
-        """GET /hackernews/users/{username}/comments — 0-based pages."""
+        """GET /hackernews/users/{username}/comments — limit 1-50 (default 20), 0-based pages."""
         return await afetch_page(self._http, routes.hackernews_comments(username, limit, page))

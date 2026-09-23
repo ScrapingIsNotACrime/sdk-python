@@ -15,13 +15,13 @@ class Appstore:
         self._http = http
 
     def search(self, term: str, *, country: str | None = None, limit: int | None = None) -> AppstoreSearch:
-        """GET /appstore/search"""
+        """GET /appstore/search — country defaults to "us", limit 1-200 (default 10)."""
         return cast(AppstoreSearch, self._http.get(routes.appstore_search(term, country, limit)))
 
     def reviews(
         self, app_id: str, *, country: str | None = None, page: int | None = None
     ) -> Page[AppstoreReview]:
-        """GET /appstore/reviews — caps at 10 pages; 1-based pages."""
+        """GET /appstore/reviews — pages 1-10 (Apple's cap); the API returns 400 past page 10."""
         return fetch_page(self._http, routes.appstore_reviews(app_id, country, page))
 
 
@@ -32,11 +32,11 @@ class AsyncAppstore:
     async def search(
         self, term: str, *, country: str | None = None, limit: int | None = None
     ) -> AppstoreSearch:
-        """GET /appstore/search"""
+        """GET /appstore/search — country defaults to "us", limit 1-200 (default 10)."""
         return cast(AppstoreSearch, await self._http.get(routes.appstore_search(term, country, limit)))
 
     async def reviews(
         self, app_id: str, *, country: str | None = None, page: int | None = None
     ) -> AsyncPage[AppstoreReview]:
-        """GET /appstore/reviews — caps at 10 pages; 1-based pages."""
+        """GET /appstore/reviews — pages 1-10 (Apple's cap); the API returns 400 past page 10."""
         return await afetch_page(self._http, routes.appstore_reviews(app_id, country, page))
