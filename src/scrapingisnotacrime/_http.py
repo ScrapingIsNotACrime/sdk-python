@@ -151,7 +151,7 @@ class SyncHttp:
                 if time.monotonic() > deadline:
                     response.close()
                     raise TimeoutError(f"Stream exceeded the {self._config.timeout:g} s deadline")
-            text = b"".join(chunks).decode("utf-8", errors="replace")
+            text = b"".join(chunks).decode(response.encoding or "utf-8", errors="replace")
         return _interpret(response.status_code, response.headers, text)
 
     def close(self) -> None:

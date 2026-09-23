@@ -198,6 +198,30 @@ async def test_async_wall_clock_timeout_becomes_connection_error() -> None:
     await http.aclose()
 
 
+_LATIN1_HEADERS = {"content-type": "application/json; charset=iso-8859-1"}
+
+
+def test_sync_decodes_body_with_response_charset() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = '{"message":"ok","data":"café"}'.encode("latin-1")
+        return httpx.Response(200, content=body, headers=_LATIN1_HEADERS)
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    http = SyncHttp(resolve_config(api_key="sinac_test", env={}), client)
+    assert http.get(Route("/x")) == "café"
+
+
+async def test_async_decodes_body_with_response_charset() -> None:
+    async def handler(request: httpx.Request) -> httpx.Response:
+        body = '{"message":"ok","data":"café"}'.encode("latin-1")
+        return httpx.Response(200, content=body, headers=_LATIN1_HEADERS)
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    http = AsyncHttp(resolve_config(api_key="sinac_test", env={}), client)
+    assert await http.get(Route("/x")) == "café"
+    await http.aclose()
+
+
 def test_2xx_without_envelope_is_api_error() -> None:
     http, _, _ = sync_http([(200, "<html>proxy</html>", {})])
     with pytest.raises(APIError, match="Unexpected response body"):
