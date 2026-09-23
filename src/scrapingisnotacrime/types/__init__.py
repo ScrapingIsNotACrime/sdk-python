@@ -44,6 +44,8 @@ __all__ = [
     "GithubRepositoryPage",
     "GithubRepositorySearchPage",
     "GithubTrending",
+    "GithubTrendingSince",
+    "HackernewsFeed",
     "HackernewsStory",
     "HackernewsStoryPage",
     "HackernewsComment",

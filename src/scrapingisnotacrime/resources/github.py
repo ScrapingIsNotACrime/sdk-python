@@ -8,6 +8,7 @@ from ..types.github import (
     GithubProfile,
     GithubRepository,
     GithubTrending,
+    GithubTrendingSince,
     GithubUser,
 )
 
@@ -50,7 +51,7 @@ class Github:
     def trending(
         self,
         *,
-        since: routes.GithubTrendingSince | None = None,
+        since: GithubTrendingSince | None = None,
         language: str | None = None,
         limit: int | None = None,
     ) -> GithubTrending:
@@ -94,7 +95,7 @@ class AsyncGithub:
     async def trending(
         self,
         *,
-        since: routes.GithubTrendingSince | None = None,
+        since: GithubTrendingSince | None = None,
         language: str | None = None,
         limit: int | None = None,
     ) -> GithubTrending:

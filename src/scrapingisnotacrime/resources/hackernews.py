@@ -4,7 +4,13 @@ from typing import TYPE_CHECKING, cast
 
 from .. import _routes as routes
 from .._pagination import AsyncPage, Page, afetch_page, fetch_page
-from ..types.hackernews import HackernewsItem, HackernewsStory, HackernewsUser, HackernewsUserComment
+from ..types.hackernews import (
+    HackernewsFeed,
+    HackernewsItem,
+    HackernewsStory,
+    HackernewsUser,
+    HackernewsUserComment,
+)
 
 if TYPE_CHECKING:
     from .._http import AsyncHttp, SyncHttp
@@ -15,7 +21,7 @@ class Hackernews:
         self._http = http
 
     def feed(
-        self, feed: routes.HackernewsFeed, *, limit: int | None = None, page: int | None = None
+        self, feed: HackernewsFeed, *, limit: int | None = None, page: int | None = None
     ) -> Page[HackernewsStory]:
         """GET /hackernews/feeds/{feed} — limit 1-50 (default 20), 0-based pages."""
         return fetch_page(self._http, routes.hackernews_feed(feed, limit, page))
@@ -50,7 +56,7 @@ class AsyncHackernews:
         self._http = http
 
     async def feed(
-        self, feed: routes.HackernewsFeed, *, limit: int | None = None, page: int | None = None
+        self, feed: HackernewsFeed, *, limit: int | None = None, page: int | None = None
     ) -> AsyncPage[HackernewsStory]:
         """GET /hackernews/feeds/{feed} — limit 1-50 (default 20), 0-based pages."""
         return await afetch_page(self._http, routes.hackernews_feed(feed, limit, page))

@@ -1,4 +1,6 @@
-from typing import NotRequired, TypedDict
+from typing import Literal, NotRequired, TypedDict
+
+HackernewsFeed = Literal["top", "new", "best", "ask", "show", "job"]
 
 
 class HackernewsStory(TypedDict):

@@ -1,4 +1,6 @@
-from typing import NotRequired, TypedDict
+from typing import Literal, NotRequired, TypedDict
+
+GithubTrendingSince = Literal["daily", "weekly", "monthly"]
 
 
 class GithubProfile(TypedDict):

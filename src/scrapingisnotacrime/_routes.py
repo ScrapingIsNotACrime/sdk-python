@@ -1,12 +1,9 @@
 from __future__ import annotations
 
-from typing import Literal
-
 from ._http import Route, segment
 from ._pagination import PageSpec
-
-GithubTrendingSince = Literal["daily", "weekly", "monthly"]
-HackernewsFeed = Literal["top", "new", "best", "ask", "show", "job"]
+from .types.github import GithubTrendingSince
+from .types.hackernews import HackernewsFeed
 
 
 # Instagram

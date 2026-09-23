@@ -1,6 +1,6 @@
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, get_args
 
 import pytest
 
@@ -57,3 +57,10 @@ def test_documented_example_matches_its_type(fixture_id: str) -> None:
 def test_validator_catches_contradictions() -> None:
     assert check({"username": 1}, t.LinktreeProfile) != []
     assert check({}, t.LinktreeProfile) != []
+
+
+def test_literal_types_are_public() -> None:
+    from scrapingisnotacrime.types import GithubTrendingSince, HackernewsFeed
+
+    assert get_args(GithubTrendingSince) == ("daily", "weekly", "monthly")
+    assert get_args(HackernewsFeed) == ("top", "new", "best", "ask", "show", "job")
